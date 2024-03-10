@@ -276,20 +276,27 @@ class Together(HFModel):
 
         headers = {"Authorization": f"Bearer {self.token}"}
 
-        try:
-            with self.session.post(url, headers=headers, json=body) as resp:
+        resp = self.session.post(url, headers=headers, json=body)
+        if resp.status_code != 200:
+            error_text = f"Request to to {url} failed with status code {resp.status_code}"
+            print(error_text)
+            # In keeping with the sytle of exception handling in the rest of the code, we raise a generic
+            # exception here
+            raise Exception(error_text)
+        else:
+            # NB: resp.json() can raise a requests.exceptions.JSONDecodeError if the response body is not valid JSON
+            # We propagate this exception to the caller
+            try:
                 resp_json = resp.json()
                 if use_chat_api:
-                    completions = [resp_json['output'].get('choices', [])[0].get('message', {}).get('content', "")]
+                    completions = [resp_json.get('choices', [])[0].get('message', {}).get('content', "")]
                 else:
-                    completions = [resp_json['output'].get('choices', [])[0].get('text', "")]
+                    completions = [resp_json.get('choices', [])[0].get('text', "")]
                 response = {"prompt": prompt, "choices": [{"text": c} for c in completions]}
                 return response
-        except Exception as e:
-            if resp_json:
-                print(f"resp_json:{resp_json}")
-            print(f"Failed to parse JSON response: {e}")
-            raise Exception("Received invalid JSON response from server")
+            except requests.exceptions.JSONDecodeError as e:
+                print(f"Failed to parse JSON response: {e}")
+                raise Exception("Received invalid JSON response from server")
 
 
 class Anyscale(HFModel):
